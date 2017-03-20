@@ -10,8 +10,10 @@ template <typename K, typename V> class TestCache
 public:
 	virtual uint32_t access(const K &k  , V &value, uint32_t status) = 0;
 ///ziqi: disable virtual remove(), because lru_ziqi.h needs a different remove() with more parameters
-	///virtual void remove(const K &k) = 0;
-
+	virtual void remove(const K &k, const V &v) = 0;
+    virtual int insert(const K &k, const V &v) = 0;
+    virtual int evict_empty()=0;
+    virtual std::list<K> get_evict_entries()=0;
 };
 
 class AbsCache {

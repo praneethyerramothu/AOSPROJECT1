@@ -4,21 +4,16 @@
 #include <stdlib.h>
 
 #include "global.h"
-#include "owbp.h"
 #include "cpp_framework.h"
 #include "configuration.h"
 #include "parser.h"
 #include "lru_stl.h"
-#include "lru_ziqi.h"
-#include "lru_dynamic.h"
-#include "lru_dynamicB.h"
-#include "lru_dynamicC.h"
-#include "lru_hotCold.h"
 #include "lru_pure.h"
-#include "arc.h"
+#include "lru_bloomf.h"
+#include <bf.h>
 
 #include "stats.h"
-#include "min.h"
+
 
 using namespace std;
 
@@ -39,6 +34,85 @@ bool _gTraceBased = false;
 TestCache<uint64_t, cacheAtom> * *_gTestCache; // pointer to each cache class in the hierachy
 StatsDS *_gStats;
 deque<reqAtom> memTrace; // in memory trace file
+
+class hotness_table{
+public:
+    hotness_table(double in_fp, size_t in_capacity, int in_size)
+    {
+      size=in_size;
+      capacity=in_capacity;
+      fp=in_fp;
+      for(int i=0;i<size;i++)
+        bfilters.push_back(new bf::basic_bloom_filter(fp, capacity));
+      m=bf::basic_bloom_filter::m(fp,capacity);
+      k=bf::basic_bloom_filter::k(fp,capacity);
+     
+    }
+    ~hotness_table()
+    {
+        for(list<bf::basic_bloom_filter*>::iterator it=bfilters.begin();it!=bfilters.end();++it)
+            delete *it;
+    }
+    list<bf::basic_bloom_filter*> bfilters;
+    
+    
+    void access(uint64_t key)
+    {
+        for(list<bf::basic_bloom_filter*>::iterator it=bfilters.begin();it!=bfilters.end();++it)
+        {
+            if((*it)->lookup(key)==0)
+            {
+                (*it)->add(key);
+                break;
+            }
+            if(next(it)==bfilters.end())
+            {
+                
+            }
+                //in this case, all bms are filled, no need to record the access any more
+        }
+        
+    }
+    
+    size_t get_hotness(uint64_t key){
+        size_t hotness=0;
+        for(list<bf::basic_bloom_filter*>::iterator it=bfilters.begin();it!=bfilters.end();++it)
+        {
+            if((*it)->lookup(key)==1)
+            {
+                hotness++;
+            }
+            
+        }
+        return hotness;
+    
+    }
+    
+    double fp;
+    size_t capacity;
+    int size;
+    size_t m;
+    size_t k;
+    
+    
+};
+
+int all_evicted_page_empty()
+{
+    int flag=1;
+    for(int i=0;i<_gConfiguration.totalLevels;i++)
+    {
+        if(_gTestCache[i]->evict_empty())
+            flag=1;
+        else
+        {
+            flag=0;
+            return 0;
+        }
+        return flag;
+    }
+}
+
 
 
 void	readTrace(deque<reqAtom> & memTrace)
@@ -118,35 +192,12 @@ void	Initialize(int argc, char **argv, deque<reqAtom> & memTrace)
 		if(_gConfiguration.GetAlgName(i).compare("pagelru") == 0) {
 			_gTestCache[i] = new PageLRUCache<uint64_t, cacheAtom>(cacheAll, _gConfiguration.cacheSize[i], i);
 		}
-		else if(_gConfiguration.GetAlgName(i).compare("ziqilru") == 0) {
-			_gTestCache[i] = new ZiqiLRUCache<uint64_t, cacheAtom>(cacheAll, _gConfiguration.cacheSize[i], i);
-		}
-		else if(_gConfiguration.GetAlgName(i).compare("dynamiclru") == 0) {
-			_gTestCache[i] = new DynamicLRUCache<uint64_t, cacheAtom>(cacheAll, _gConfiguration.cacheSize[i], i);
-		}
-		else if(_gConfiguration.GetAlgName(i).compare("dynamicBlru") == 0) {
-			_gTestCache[i] = new DynamicBLRUCache<uint64_t, cacheAtom>(cacheAll, _gConfiguration.cacheSize[i], i);
-		}
-		else if(_gConfiguration.GetAlgName(i).compare("dynamicClru") == 0) {
-			_gTestCache[i] = new DynamicCLRUCache<uint64_t, cacheAtom>(cacheAll, _gConfiguration.cacheSize[i], i);
-		}
-		else if(_gConfiguration.GetAlgName(i).compare("hotcoldlru") == 0) {
-			_gTestCache[i] = new HotColdLRUCache<uint64_t, cacheAtom>(cacheAll, _gConfiguration.cacheSize[i], i);
-		}
+    
 		else if(_gConfiguration.GetAlgName(i).compare("purelru") == 0) {
 			_gTestCache[i] = new PureLRUCache<uint64_t, cacheAtom>(cacheAll, _gConfiguration.cacheSize[i], i);
 		}
-		else if(_gConfiguration.GetAlgName(i).compare("arc") == 0) {
-			_gTestCache[i] = new ARC<uint64_t, cacheAtom>(cacheAll, _gConfiguration.cacheSize[i], i);
-		}
-		else if(_gConfiguration.GetAlgName(i).compare("pagemin") == 0) {
-			_gTestCache[i] = new PageMinCache(cacheAll, _gConfiguration.cacheSize[i], i);
-		}
-		else if(_gConfiguration.GetAlgName(i).compare("blockmin") == 0) {
-			_gTestCache[i] = new BlockMinCache(cacheAll, _gConfiguration.cacheSize[i], i);
-		}
-		else if(_gConfiguration.GetAlgName(i).find("owbp") != string::npos) {
-			_gTestCache[i] = new OwbpCache(cacheAll, _gConfiguration.cacheSize[i], i);
+		else if(_gConfiguration.GetAlgName(i).compare("bflru") == 0) {
+			_gTestCache[i] = new BFLRUCache<uint64_t, cacheAtom>(cacheAll, _gConfiguration.cacheSize[i], i);
 		}
 //esle if //add new policy name and dynamic allocation here
 		else {
@@ -249,18 +300,23 @@ void runSeqLengthAnalysis()
 void RunBenchmark(deque<reqAtom> & memTrace)
 {
 	PRINTV(logfile << "Start benchmarking" << endl;);
-
+    hotness_table hot_table(0.8,100000,20);
+    
 	//main simulation loop
 	while(! memTrace.empty()) {
 		uint32_t newFlags = 0;
 		reqAtom newReq = memTrace.front();
 		cacheAtom newCacheAtom(newReq);
-
+        //wei xie: record which level it hits
+        uint32_t hitLayer=_gConfiguration.totalLevels;
 		//access hierachy from top layer, reqSize is always equal to 1
 		for(int i = 0 ; i < _gConfiguration.totalLevels ; i++) {
 			//access cache at level i for newReq
 			//BUG: victim dirty pages from upper levels does not access lower levels
 			newFlags = _gTestCache[i]->access(newReq.fsblkno, newCacheAtom, newReq.flags);
+            
+            
+            //TODO: need to determine if evicted page needs to be demoted to lower level or discarded
 			collectStat(i, newFlags);
 			
 			//BUG: write requests in the upper-level write-back cache does not access lower levels even
@@ -268,11 +324,65 @@ void RunBenchmark(deque<reqAtom> & memTrace)
 			 */
 			
 			if(newFlags & PAGEHIT)
+            {
+                hitLayer=i;
 				break; // no need to check further down in the hierachy
-
+            }
 			recordOutTrace(i, newReq);
 			newFlags = 0; // reset flag
 		}
+		
+        //load cache to the correct layer
+        int hotness=hot_table.get_hotness(newReq.fsblkno);
+        cout<<"Hotness of key "<<newReq.fsblkno<<" is "<<hotness<<endl;
+        getchar();
+        hot_table.access(newReq.fsblkno);
+        /*
+        int newLayer=get_layer_promote(hotness,hitLayer);
+        
+		if(newLayer!=hitLayer)
+        {
+            //remove from hit layer
+            if(hitLayer!=_gConfiguration.totalLevels)
+                _gTestCache[hitLayer]->remove(newReq.fsblkno,newCacheAtom);
+            //insert into target layer
+                _gTestCache[newLayer]->insert(newReq.fsblkno,newCacheAtom);
+        }
+        */
+        //handle evicted pages
+        //need to know what pages are evicted
+        //there are two cases a page is evicted
+        //(1) on hit at layer i, and it decides to promote the page to layer j (j<i), if this layer is full, a page is evicted
+        //(2) if miss at all layers, it devides to load the page to layer j, if this layer is full, a page is evicted
+        //it is noted that an evicted may be demoted to a lower level cache, which will result a chain of evictions
+        
+        //if there are still evicted pages, continue
+        //TODO implement all_evicted_page_empty()
+        /*
+        while(!all_evicted_page_empty())
+        {
+            //handle evicted pages 1 layer a time
+            for(int i = 0 ; i < _gConfiguration.totalLevels ; i++) {
+                list<uint64_t> evict_list(_gTestCache[i]->get_evict_entries());
+                
+                //iterate through all evicted pages
+                while(!evict_list.empty()){
+                    uint64_t key=evict_list.back();
+                    evict_list.pop_back();
+                    int hotness=hot_table.get_hotness(key);
+                    int newLayer=get_layer_demote(hotness,i);
+                    if(newLayer!=_gConfiguration.totalLevels)
+                        //insert into target layer
+                        _gTestCache[newLayer]->insert(key,newCacheAtom);
+                }
+                
+                //lookup bloom filter to see the hotness
+                
+                //demote to a lower layer or write-back (dirty) or discard (clean)
+
+            }
+        }
+        */
 
 		memTrace.pop_front();
 		reportProgress();

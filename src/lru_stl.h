@@ -300,6 +300,14 @@ private:
 		assert(itTracker != _key_tracker.end());
 		remove(*(itTracker), v);
 	}
+	int evict_empty(){
+        return 1;
+    }
+    
+    list<K> get_evict_entries()
+    {
+        
+    }
 
 // The function to be cached
 	V(*_fn)(const K & , V);

@@ -9,8 +9,8 @@
 // Copyright: See COPYING file that comes with this distribution
 //
 
-#ifndef LRU_PURE_H
-#define LRU_PURE_H
+#ifndef LRU_BLOOMF_H
+#define LRU_BLOOMF_H
 
 #include <map>
 #include <list>
@@ -21,6 +21,8 @@
 #include "global.h"
 #include "baseCache.h"
 
+
+
 using namespace std;
 
 extern int totalEvictedCleanPages;
@@ -29,7 +31,7 @@ extern int totalNonSeqEvictedDirtyPages;
 
 
 template <typename K, typename V>
-class PureLRUCache : public TestCache<K, V>
+class BFLRUCache : public TestCache<K, V>
 {
 public:
 // Key access history, most recent at back
@@ -37,9 +39,10 @@ public:
 // Key to value and key history iterator
 	typedef map
 	< K, pair<V, typename key_tracker_type::iterator> > 	key_to_value_type;
+    
 // Constuctor specifies the cached function and
 // the maximum number of records to be stored.
-	PureLRUCache(
+	BFLRUCache(
 		V(*f)(const K & , V),
 		size_t c,
 		unsigned levelMinus
@@ -73,9 +76,13 @@ public:
 // Evaluate function and create new record
 			const V v = _fn(k, value);
 ///ziqi: inserts new elements on read and write miss
-			status |=  insert(k, v);
-			PRINTV(logfile << "Insert done on key: " << k << endl;);
-			PRINTV(logfile << "Cache utilization: " << _key_to_value.size() << "/" << _capacity << endl;);
+//			status |=  insert(k, v);
+//			PRINTV(logfile << "Insert done on key: " << k << endl;);
+//			PRINTV(logfile << "Cache utilization: " << _key_to_value.size() << "/" << _capacity << endl;);
+            
+//wei xie: go to the next level to see if Hit, do not load it directly
+//mark this level cache as miss
+//only when the lowest level misses, load it to cache (level determined by hotness)
 			return (status | PAGEMISS);
 		}
 		else {
@@ -141,6 +148,7 @@ public:
 
 		if(it->second.first.getReq().flags & DIRTY) {
 ///ARH: record flashSim output log
+//wei xie: need to record trace for each level of device
 			recordOutTrace(k,v);
 ///ziqi: DiskSim format Request_arrival_time Device_number Block_number Request_size Request_flags
 ///ziqi: Device_number is set to 1. About Request_flags, 0 is for write and 1 is for read
@@ -154,6 +162,11 @@ public:
 			assert(it != _key_to_value.end());
 			_key_to_value.erase(it);
 			_key_tracker.remove(k);
+            //record evicted pages
+            typename key_tracker_type::iterator itNew =_evicted_key_tracker.insert(_evicted_key_tracker.end(), k);
+            //record key to value 
+            _evicted_key_to_value.insert(make_pair(k, make_pair(v, itNew)));
+            
 			PRINTV(logfile << "Cache utilization: " << _key_to_value.size() << "/" << _capacity << endl << endl;);
 		}
 		else {
@@ -164,11 +177,15 @@ public:
 			assert(it != _key_to_value.end());
 			_key_to_value.erase(it);
 			_key_tracker.remove(k);
+            //record evicted pages
+            typename key_tracker_type::iterator itNew=_evicted_key_tracker.insert(_evicted_key_tracker.end(),k);
+            _evicted_key_to_value.insert(make_pair(k, make_pair(v, itNew)));
+            
 			///PRINTV(logfile << "Cache utilization: " << _key_to_value.size() <<"/"<<_capacity <<endl<<endl;);
 		}
 	}
 
-private:
+
 	void recordOutTrace(const K& k, const V& v){
 		
 		unsigned level =0; //temporary for the highet level only
@@ -242,16 +259,22 @@ private:
 // Identify least recently used key
 		typename key_tracker_type::iterator itTracker = _key_tracker.begin();
 		assert(itTracker != _key_tracker.end());
+        //determine if need to demote
 		remove(*(itTracker), v);
 	}
+	
 	int evict_empty(){
-        return 1;
-    }
-    list<K> get_evict_entries()
-    {
-        
+        if(_evicted_key_tracker.empty())
+            return 1;
+        else 
+            return 0;
     }
     
+    list<K> get_evict_entries()
+    {
+        list<K> newlist(_evicted_key_tracker);
+        return newlist;
+    }
 
 // The function to be cached
 	V(*_fn)(const K & , V);
@@ -260,8 +283,12 @@ private:
 
 // Key access history
 	key_tracker_type _key_tracker;
+// Key eviction history
+    key_tracker_type _evicted_key_tracker;
 // Key-to-value lookup
 	key_to_value_type _key_to_value;
+// Evicted Key-to-value lookup
+    key_to_value_type _evicted_key_to_value;
 	unsigned levelMinusMinus;
 };
 

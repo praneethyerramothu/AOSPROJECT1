@@ -10,7 +10,7 @@ endif
 
 # Compile in Debug mode :
 # CPPFLAG = -g -DDEBUG -DVERB -std=c++0x -Wall
-CPPFLAG = -g -DDEBUG -DVERB -std=c++0x -Wall -DREQSIZE
+CPPFLAG = -g -DDEBUG -DVERB -std=c++0x -Wall -DREQSIZE -lbf
 # CPPFLAG = -g -DDEBUG  -std=c++0x -Wall
 
 # Compile in Resealese mode:
