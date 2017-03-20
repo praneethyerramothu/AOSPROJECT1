@@ -27,3 +27,10 @@ sim-ideal
 ##################
 *.kdev4
 *-swp
+
+L1Trace.out
+L2Trace.out
+L3Trace.out
+flashsim/flashsim
+log.txt
+
