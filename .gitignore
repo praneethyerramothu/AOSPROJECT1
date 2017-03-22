@@ -25,7 +25,6 @@ sim-ideal
 *.stat
 # Kdevelop files #
 ##################
-*.kdev4
 *-swp
 
 L1Trace.out
