@@ -1,0 +1,62 @@
+[Buildset]
+BuildItems=@Variant(\x00\x00\x00\t\x00\x00\x00\x00\x01\x00\x00\x00\x0b\x00\x00\x00\x00\x01\x00\x00\x00\x1e\x00s\x00i\x00m\x00-\x00i\x00d\x00e\x00a\x00l\x00-\x00d\x00e\x00v\x00e\x00l)
+
+[Launch]
+Launch Configurations=Launch Configuration 3,Launch Configuration 0,Launch Configuration 1
+
+[Launch][Launch Configuration 0]
+Configured Launch Modes=execute
+Configured Launchers=nativeAppLauncher
+Name=src_1K
+Type=Native Application
+
+[Launch][Launch Configuration 0][Data]
+Arguments=./Traces/src_1K.csv sample.cfg test-output
+Dependencies=@Variant(\x00\x00\x00\t\x00\x00\x00\x00\x00)
+Dependency Action=Nothing
+EnvironmentGroup=default
+Executable=file:///home/arh/sim-ideal/sim-ideal
+External Terminal=konsole --noclose --workdir %workdir -e %exe
+Project Target=
+Use External Terminal=false
+Working Directory=file:///home/arh/sim-ideal
+isExecutable=true
+
+[Launch][Launch Configuration 1]
+Configured Launch Modes=execute
+Configured Launchers=nativeAppLauncher
+Name=flashsim
+Type=Native Application
+
+[Launch][Launch Configuration 1][Data]
+Arguments=./trace/
+Dependencies=@Variant(\x00\x00\x00\t\x00\x00\x00\x00\x00)
+Dependency Action=Nothing
+EnvironmentGroup=default
+Executable=file:///home/wei/sim-ideal-devel/flashsim/flashsim
+External Terminal=konsole --noclose --workdir %workdir -e %exe
+Project Target=
+Use External Terminal=false
+Working Directory=file:///home/wei/sim-ideal-devel/flashsim
+isExecutable=true
+
+[Launch][Launch Configuration 3]
+Configured Launch Modes=execute
+Configured Launchers=nativeAppLauncher
+Name=small.csv
+Type=Native Application
+
+[Launch][Launch Configuration 3][Data]
+Arguments=./Traces/bodytrack_1m.uniq sample.cfg test-output
+Dependencies=@Variant(\x00\x00\x00\t\x00\x00\x00\x00\x00)
+Dependency Action=Nothing
+EnvironmentGroup=default
+Executable=file:///home/wei/sim-ideal-devel/sim-ideal
+External Terminal=konsole --noclose --workdir %workdir -e %exe
+Project Target=
+Use External Terminal=false
+Working Directory=file:///home/wei/sim-ideal-devel/
+isExecutable=true
+
+[Project]
+VersionControlSupport=kdevgit
