@@ -335,7 +335,7 @@ void RunBenchmark(deque<reqAtom> & memTrace)
         //load cache to the correct layer
         int hotness=hot_table.get_hotness(newReq.fsblkno);
         cout<<"Hotness of key "<<newReq.fsblkno<<" is "<<hotness<<endl;
-        getchar();
+        //getchar();
         hot_table.access(newReq.fsblkno);
         /*
         int newLayer=get_layer_promote(hotness,hitLayer);
