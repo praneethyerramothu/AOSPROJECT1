@@ -383,6 +383,69 @@ void RunBenchmark(deque<reqAtom> & memTrace)
             }
         }
         */
+		
+		
+		// Start of Test Code
+		
+		
+		while(!all_evicted_page_empty())
+        {
+            //handle evicted pages 1 layer a time
+            for(int i = 0 ; i < _gConfiguration.totalLevels ; i++) {
+                list<uint64_t> evict_list(_gTestCache[i]->get_evict_entries());
+                
+                //iterate through all evicted pages
+                while(!evict_list.empty()){
+                    uint64_t key=evict_list.back();
+                    evict_list.pop_back();
+                    //insert key to the lower level cache's Least Recently Used side (beigin of list)
+            
+            }
+            }
+            
+            
+            // Inserting and arranging evicted pages
+            
+            int i,j=0;
+            int *h;
+            h=(int*)malloc(sizeof(_gConfiguration.totalLevels));
+            for(i=0;i<_gConfiguration.totalLevels;i++)
+            {
+               
+                if(j>=1 && j<_gConfiguration.totalLevels)       // inserting evicted page in higher level cache
+                {
+                    if(_gTestCache[i].isFull())     // Check to see if the immediate higher level cache is also full 
+                    {
+                        h[i]=_gTestCache[i].pop_back();
+                        _gTestCache[i].insert(_gTestCache[i].end(),h[i-1]); //inserting evicted pages in higher level cache
+                    }
+                    else
+                    {
+                        _gTestCache[i].insert(_gTestCache[i].end(),h[i-1]);   
+                        break;
+                    }
+                }
+                
+                else if(j<1)             //inserting ket to the lowest level cache
+                {
+                    if(_gTestCache[i].isFull())   // if lowest level cache is full
+                    {
+                        h[i]=_gTestCache[i].pop_back();      // evict least recently used page and store in h 
+                        _gTestCache[i].insert(_gTestCache[i].end(),key); //insert the key in lowest level cache
+                    }
+                    else
+                    {
+                        _gTestCache[i].insert(_gTestCache[i].end(),key);
+                       break;
+                    }
+                    j++;
+                }
+            }
+		
+		
+		//End of Test Code
+		
+		
 
 		memTrace.pop_front();
 		reportProgress();
