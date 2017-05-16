@@ -297,6 +297,13 @@ void runSeqLengthAnalysis()
 	system(command.c_str());
 }
 
+float randFunc()
+        {
+            float randval=static_cast <float> (rand())/ static_cast <float>(RAND_MAX) ;
+            return randval;
+        } 
+
+
 void RunBenchmark(deque<reqAtom> & memTrace)
 {
 	PRINTV(logfile << "Start benchmarking" << endl;);
@@ -330,8 +337,44 @@ void RunBenchmark(deque<reqAtom> & memTrace)
             }
 			recordOutTrace(i, newReq);
 			newFlags = 0; // reset flag
+            noHitAtom=0;
 		}
 		
+        
+            
+        for(i=hitLayer-1; i >=0 ;i--)
+        {
+            
+            if( newFlags)
+        {
+            _gTestCache[++i]->remove(newReq.fsblkno,newCacheAtom);
+            r=randFunc();
+            if(r>0.5)
+            {
+                _gTestCache[--i]->insert(newReq.fsblkno,newCacheAtom);
+            }
+            else
+                break;
+            }
+          
+         else if(!noHitAtom)
+         {
+        _gTestCache[_gConfiguration.totalLevels]->insert(newReq.fsblkno,newCacheAtom);
+           while(i>0)
+           {
+               r=randFunc();
+             if(r>0.5)
+             {
+                 _gTestCache[--i]->insert(newReq.fsblkno,newCacheAtom);
+             }
+               else
+                   break;
+          
+          }     
+        }
+        
+        }
+        
         //load cache to the correct layer
         int hotness=hot_table.get_hotness(newReq.fsblkno);
         cout<<"Hotness of key "<<newReq.fsblkno<<" is "<<hotness<<endl;
@@ -426,3 +469,4 @@ int main(int argc, char **argv)
 	RunBenchmark(memTrace); // send reference memTrace
 	ExitNow(0);
 }
+
